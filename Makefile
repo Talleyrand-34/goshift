@@ -1,6 +1,7 @@
 # Go parameters
 GOCMD=go
-GOFILE=main.go
+GOMAINFILE=goshift.go
+GOFILES=utils.go
 GOBUILD=$(GOCMD) build
 GOCLEAN=$(GOCMD) clean
 GOTEST=$(GOCMD) test
@@ -10,20 +11,21 @@ BINARY_UNIX=$(BINARY_NAME)_unix
 BTRFS_ROOT_1=/
 BTRFS_ROOT_2=/mnt/btrfs-test-mnt
 
-all: build test 
+all: clean build test 
 
 build:
-	$(GOBUILD) -o $(BINARY_NAME) -v $(GOFILE)  
+	$(GOBUILD) -o $(BINARY_NAME) -v $(GOMAINFILE) $(GOFILES)
 
 test: setup-test testlistroot testlistmnt
 
 setup-btrfs-testdeps:
-	dd if=/dev/zero of=btrfs.mount bs=1M count=1000
-	mkfs.btrfs btrfs.mount
+	mkdir -p ./testassets
+	dd if=/dev/zero of=./testassets/btrfs.mount bs=1M count=1000
+	mkfs.btrfs ./testassets/btrfs.mount
 
 setup-test:
 	doas mkdir -p /mnt/btrfs-test-mnt
-	-doas mount ./btrfs.mount /mnt/btrfs-test-mnt # || true
+	-doas mount ./testassets/btrfs.mount /mnt/btrfs-test-mnt # || true
 
 
 testlistroot:
