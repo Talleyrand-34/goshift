@@ -1,259 +1,153 @@
-/*
-   Copyright The containerd Authors.
-
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-*/
-
+// Package This package provides a btrfs volumes management tool
 package main
 
 import (
 	// "flag"
+
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 
-	// "text/tabwriter"
 	"github.com/containerd/btrfs/v2"
 	// tea "github.com/charmbracelet/bubbletea"
+	// "text/tabwriter"
 )
 
-func manageSubvolume(args []string) {
-	// check run conditions
-	if len(args) < 1 {
-		log.Fatal("Subvolume needs a command", os.Args[1])
-		os.Exit(1)
-		return
-	}
-	if len(args) < 2 {
-		log.Fatal("create needs a valid folder", os.Args[1])
-		os.Exit(1)
-	}
-	// Path treatment
-	dir := ""
-	if filepath.IsAbs(args[1]) {
-		dir = args[1]
-	} else {
-		dir, _ = os.Getwd()
-		dir = dir + args[1]
-	}
-	fmt.Println(dir)
-
-	fmt.Println("Is a valid subvolume:", btrfs.IsSubvolume(dir))
-	// command section
-	switch args[0] {
-	case "list":
-		treelist, err := btrfs.SubvolList(dir)
-		if err != nil {
-			log.Fatalln(err)
-		}
-		jsonData, err := transformInfoArray(treelist)
-		if err != nil {
-			fmt.Println("Error marshaling JSON:", err)
-			return
-		}
-
-		fmt.Println(string(jsonData))
-		// fmt.Printf("%#v\n", treelist)
-		// for _, sv := range treelist {
-		// 	fmt.Println(sv)
-		// }
-
-	case "show":
-		info, err := btrfs.SubvolInfo(dir)
-		if err != nil {
-			log.Fatalln(err)
-		}
-		fmt.Printf("%#v\n", info)
-
-	case "create":
-		// if (){
-
-		err := btrfs.SubvolCreate(dir)
-		if err != nil {
-			log.Fatal(err)
-		}
-	default:
-		log.Fatal("Subvolume needs a command", os.Args[1])
-		os.Exit(1)
-
-		// }
-	}
+type Command struct {
+	CommL1        string
+	CommL2        string
+	Description   string
+	Execute       func(interface{}) (interface{}, error)
+	Check_path    func(interface{}) (interface{}, error)
+	Error_msg     func(string, error)
+	Validate_args func(interface{}) (interface{}, error)
+	Json_msg      func(interface{}) (interface{}, error)
 }
 
-func transformInfoArray(infos []btrfs.Info) ([]byte, error) {
-	return json.Marshal(infos)
+var Commands = []Command{
+	{
+		CommL1:        "subvolume",
+		CommL2:        "create",
+		Description:   "Creates a subvolume in btrfs volume root",
+		Execute:       func(dir interface{}) (interface{}, error) { return btrfs.SubvolList(dir.(string)) },
+		Check_path:    func(dir interface{}) (interface{}, error) { return check_btrfs_subvolume(dir.(string)) },
+		Error_msg:     errorMessage,
+		Validate_args: nil,
+		Json_msg:      func(btrfs_struct interface{}) (interface{}, error) { return json.Marshal(btrfs_struct.(btrfs.Info)) },
+	},
+	{
+		CommL1:        "subvolume",
+		CommL2:        "info",
+		Description:   "Shows subvolume info",
+		Execute:       func(dir interface{}) (interface{}, error) { return btrfs.SubvolInfo(dir.(string)) },
+		Check_path:    func(dir interface{}) (interface{}, error) { return check_btrfs_subvolume(dir.(string)) },
+		Error_msg:     errorMessage,
+		Validate_args: nil,
+		Json_msg:      func(btrfs_struct interface{}) (interface{}, error) { return json.Marshal(btrfs_struct.(btrfs.Info)) },
+	},
 }
+
+func BtrfsCommandExecuter(
+	command string,
+	subcommand string,
+	route string,
+	args []string,
+) (jsondata string, err error) {
+	cmd, err := findCommand(command, subcommand)
+	if err != nil {
+		return "", fmt.Errorf("command not found: %v", err)
+	}
+	// // Check if the route is valid
+	// checkResult, checkErr := cmd.Check_path(route)
+	// if checkErr != nil {
+	// 	return "", fmt.Errorf("Error checking route: %v", checkErr)
+	// }
+	// if !checkResult.(bool) {
+	// 	return "", fmt.Errorf("Invalid route: %v", route)
+	// }
+
+	btrfsfn, err := cmd.Execute(route)
+	if err != nil {
+		log.Println(err)
+		return "", err
+	}
+
+	// Process the btrfsfn through Json_msg function
+	jsonResult, err := cmd.Json_msg(btrfsfn)
+	if err != nil {
+		return "", fmt.Errorf("error marshaling JSON: %v", err)
+	}
+
+	// Convert jsonResult to string
+	jsondata = string(jsonResult.([]byte))
+
+	return jsondata, nil
+}
+
+// dir, err := check_btrfs_subvolume(args[1])
+// if err != nil {
+// 	return "", err
+// }
+//
+// operation, err := chooseBtrfsOperation(args)
+// if err != nil {
+// 	return "", err
+// }
+//
+
+//
+// jsonData, err := json.Marshal(result)
+// if err != nil {
+// 	return "", fmt.Errorf("error marshaling JSON: %v", err)
+// }
+// return "", nil
 
 func main() {
 	args := os.Args[1:]
-	if args[0] == "" {
-		log.Fatal("unknown command", os.Args[1])
-		os.Exit(1)
+	if len(args) == 0 || args[0] == "help" || args[0] == "-h" || args[0] == "--help" {
+		printUsage()
+		os.Exit(0)
 	}
-	switch args[0] {
-	case "subvolume":
-		fmt.Println("case subvolume")
-		manageSubvolume(args[1:])
 
-	case "snapshot":
-		fmt.Println("case snapshot")
-	default:
-		log.Fatal("unknown command", os.Args[1])
-		os.Exit(1)
+	if len(args) < 3 {
+		log.Fatal("Insufficient arguments. Use 'help' for usage information.")
 	}
+
+	command := args[0]
+	subcommand := args[1]
+	route := args[2]
+	var additionalArgs []string
+
+	if len(args) > 3 {
+		additionalArgs = args[3:]
+	} else {
+		additionalArgs = []string{""}
+	}
+
+	fmt.Printf("Executing: %s %s on route %s with args: %v\n", command, subcommand, route, additionalArgs)
+
+	info, err := BtrfsCommandExecuter(command, subcommand, route, additionalArgs)
+	if err != nil {
+		log.Fatalf("Error executing command: %v", err)
+	}
+
+	fmt.Println("Command output:")
+	fmt.Println(info)
+
 	os.Exit(0)
 }
 
-// p := tea.NewProgram(initialModel())
-// if _, err := p.Run(); err != nil {
-//     fmt.Printf("Alas, there's been an error: %v", err)
-//     os.Exit(1)
-// }
+func printUsage() {
+	fmt.Println("Usage: program <command> <subcommand> <route> [additional args...]")
+	fmt.Println("Available commands:")
+	for _, cmd := range Commands {
+		fmt.Printf("  %s %s: %s\n", cmd.CommL1, cmd.CommL2, cmd.Description)
+	}
+}
 
-// switch os.Args[1] {
-// case "create":
-// 	if err := btrfs.SubvolCreate(os.Args[2]); err != nil {
-// 		log.Fatalln(err)
-// 	}
-// case "snapshot":
-// 	if err := btrfs.SubvolSnapshot(os.Args[3], os.Args[2], readonly); err != nil {
-// 		log.Fatalln(err)
-// 	}
-// case "delete":
-// 	if err := btrfs.SubvolDelete(os.Args[2]); err != nil {
-// 		log.Fatalln(err)
-// 	}
-// case "list":
-// 	infos, err := btrfs.SubvolList(os.Args[2])
-// 	if err != nil {
-// 		log.Fatalln(err)
-// 	}
-// 	tw := tabwriter.NewWriter(os.Stdout, 0, 8, 4, '\t', 0)
-//
-// 	fmt.Fprintf(tw, "ID\tParent\tTopLevel\tGen\tOGen\tUUID\tParentUUID\tPath\n")
-//
-// 	for _, subvol := range infos {
-// 		fmt.Fprintf(tw, "%d\t%d\t%d\t%d\t%d\t%s\t%s\t%s\n",
-// 			subvol.ID, subvol.ParentID, subvol.TopLevelID,
-// 			subvol.Generation, subvol.OriginalGeneration, subvol.UUID, subvol.ParentUUID,
-// 			subvol.Path)
-//
-// 	}
-//
-// 	tw.Flush()
-// case "show":
-// 	info, err := btrfs.SubvolInfo(os.Args[2])
-// 	if err != nil {
-// 		log.Fatalln(err)
-// 	}
-//
-// 	fmt.Printf("%#v\n", info)
-// default:
-// 	log.Fatal("unknown command", os.Args[1])
-// }
-
-// TUI
-//
-// type model struct {
-//     choices  []string           // items on the to-do list
-//     cursor   int                // which to-do list item our cursor is pointing at
-//     selected map[int]struct{}   // which to-do items are selected
-// }
-// func initialModel() model {
-// 	return model{
-// 		// Our to-do list is a grocery list
-// 		choices:  []string{"List Subvolumes", "Buy celery", "Buy kohlrabi"},
-//
-// 		// A map which indicates which choices are selected. We're using
-// 		// the  map like a mathematical set. The keys refer to the indexes
-// 		// of the `choices` slice, above.
-// 		selected: make(map[int]struct{}),
-// 	}
-// }
-// func (m model) Init() tea.Cmd {
-//     // Just return `nil`, which means "no I/O right now, please."
-//     return nil
-// }
-//
-// func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-//     switch msg := msg.(type) {
-//
-//     // Is it a key press?
-//     case tea.KeyMsg:
-//
-//         // Cool, what was the actual key pressed?
-//         switch msg.String() {
-//
-//         // These keys should exit the program.
-//         case "ctrl+c", "q":
-//             return m, tea.Quit
-//
-//         // The "up" and "k" keys move the cursor up
-//         case "up", "k":
-//             if m.cursor > 0 {
-//                 m.cursor--
-//             }
-//
-//         // The "down" and "j" keys move the cursor down
-//         case "down", "j":
-//             if m.cursor < len(m.choices)-1 {
-//                 m.cursor++
-//             }
-//
-//         // The "enter" key and the spacebar (a literal space) toggle
-//         // the selected state for the item that the cursor is pointing at.
-//         case "enter", " ":
-//             _, ok := m.selected[m.cursor]
-//             if ok {
-//                 delete(m.selected, m.cursor)
-//             } else {
-//                 m.selected[m.cursor] = struct{}{}
-//             }
-//         }
-//     }
-//
-//     // Return the updated model to the Bubble Tea runtime for processing.
-//     // Note that we're not returning a command.
-//     return m, nil
-// }
-// func (m model) View() string {
-//     // The header
-//     s := "What should we buy at the market?\n\n"
-//
-//     // Iterate over our choices
-//     for i, choice := range m.choices {
-//
-//         // Is the cursor pointing at this choice?
-//         cursor := " " // no cursor
-//         if m.cursor == i {
-//             cursor = ">" // cursor!
-//         }
-//
-//         // Is this choice selected?
-//         checked := " " // not selected
-//         if _, ok := m.selected[i]; ok {
-//             checked = "x" // selected!
-//         }
-//
-//         // Render the row
-//         s += fmt.Sprintf("%s [%s] %s\n", cursor, checked, choice)
-//     }
-//
-//     // The footer
-//     s += "\nPress q to quit.\n"
-//
-//     // Send the UI for rendering
-//     return s
-// }
+// main takes args
+// main => args -> chooseBtrfsOperation chooses which submodule -> chooseSubvolumeOperation
+// main => args -> chooseSubvolumeOperation chooses which submodule command -> btrfs.func && argsErrManagement && errorMessage
+// x => Printer -> json.localbtrfs
+// main => chooseSubvolumeOperation.out && args && Printer && folder_checker -> Btrfs Executer -> json.log
