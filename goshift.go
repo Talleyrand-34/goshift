@@ -85,24 +85,6 @@ func BtrfsCommandExecuter(
 	return jsondata, nil
 }
 
-// dir, err := check_btrfs_subvolume(args[1])
-// if err != nil {
-// 	return "", err
-// }
-//
-// operation, err := chooseBtrfsOperation(args)
-// if err != nil {
-// 	return "", err
-// }
-//
-
-//
-// jsonData, err := json.Marshal(result)
-// if err != nil {
-// 	return "", fmt.Errorf("error marshaling JSON: %v", err)
-// }
-// return "", nil
-
 func main() {
 	args := os.Args[1:]
 	if len(args) == 0 || args[0] == "help" || args[0] == "-h" || args[0] == "--help" {
@@ -145,9 +127,3 @@ func printUsage() {
 		fmt.Printf("  %s %s: %s\n", cmd.CommL1, cmd.CommL2, cmd.Description)
 	}
 }
-
-// main takes args
-// main => args -> chooseBtrfsOperation chooses which submodule -> chooseSubvolumeOperation
-// main => args -> chooseSubvolumeOperation chooses which submodule command -> btrfs.func && argsErrManagement && errorMessage
-// x => Printer -> json.localbtrfs
-// main => chooseSubvolumeOperation.out && args && Printer && folder_checker -> Btrfs Executer -> json.log
