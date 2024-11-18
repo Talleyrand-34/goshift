@@ -30,12 +30,12 @@ var createCmd = &cobra.Command{
 	`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		interface_create_subvolume(cmd, args, btrfs.SubvolCreate, create_subvolume_redhat_style)
+		interface_create_subvolume(cmd, args, btrfs.SubvolCreate, CreateSubvolumeRedhatStyle)
 	},
 }
 
 // func(dir interface{}) (interface{}, error) { return check_btrfs_subvolume(dir.(string)) }
-func interface_create_subvolume(cmd *cobra.Command, args []string, create_subvol func(string) error, create_redhat_subvol func(string)) {
+func interface_create_subvolume(cmd *cobra.Command, args []string, create_subvol func(string) error, create_redhat_subvol func(string) error) {
 	redhatstd, _ := cmd.Flags().GetBool("redhatstd")
 	route := args[len(args)-1]
 	if !redhatstd {
@@ -49,57 +49,79 @@ func interface_create_subvolume(cmd *cobra.Command, args []string, create_subvol
 	create_redhat_subvol(route)
 }
 
-func create_subvolume_redhat_style(subvolume string) {
-	// func create_subvolume_redhat_style(subvolume string) {
-	// Get the base name (file name or last directory in the path)
-	// baseName := filepath.Base(subvolume)
-	// Get the directory name (path without the last element)
-	// dirName := filepath.Dir(subvolume)
-	// TODO err management
+func CreateSubvolumeRedhatStyle(subvolume string) error {
 	// Get Physical device to perform operations
-	phDev, psubv, _ := GetMountpoint(subvolume)
-	print(phDev, "\n")
-	print(psubv, "\n")
-	// Mount device on "/tmp/goshift/mount-create + uuid"
-	// Generate a unique UUID for the temporary mount point
+	var subvolume_derived string
+
+	if _, err := os.Stat(subvolume); os.IsExist(err) {
+		return fmt.Errorf("subvolume already exists: %s", subvolume)
+	}
+	subvolume_derived = filepath.Dir(subvolume)
+	subvolume_basename := filepath.Base(subvolume)
+	phDev, _, err := GetMountpoint(subvolume_derived)
+	if err != nil {
+		return fmt.Errorf("failed to get mountpoint: %w", err)
+	}
+
+	// Create and mount temporary directory
+	tempMountPath, err := createAndMountTempDir(phDev)
+	if err != nil {
+		return err
+	}
+	defer cleanupTempMount(tempMountPath)
+
+	// Create subvolume
+	err = btrfs.SubvolCreate(tempMountPath + "/@" + subvolume_basename)
+	//err = createSubvolumeAtPath(subvolume, tempMountPath)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func createAndMountTempDir(phDev string) (string, error) {
 	mountUUID := uuid.New().String()
 	tempMountPath := filepath.Join(tmppath, "/mount-create-", mountUUID)
-	// Create the temporary mount directory
-	// err := cmdx.RunCommandPrintOutput("mkdir", "-p", tempMountPath)
+
 	err := os.MkdirAll(tempMountPath, 0744)
 	if err != nil {
-		fmt.Printf("Error creating temporary mount directory: %v\n", err)
-		return
+		return "", fmt.Errorf("failed to create temporary mount directory: %w", err)
 	}
-	// Mount device on temporary path
+
 	args := []string{phDev, tempMountPath}
 	_, err = cmdx.RunCommandReturnOutputWithDirAndEnv("mount", tmppath, nil, args...)
 	if err != nil {
-		fmt.Printf("Error mounting device: %v\n", err)
-		return
-	}
-	// Create subvolume
-	basename_subvolume := filepath.Base(subvolume)
-	newSubvolPath := filepath.Join(tempMountPath, basename_subvolume)
-	err = btrfs.SubvolCreate(newSubvolPath)
-	if err != nil {
-		fmt.Printf("Error creating subvolume")
+		os.RemoveAll(tempMountPath)
+		return "", fmt.Errorf("failed to mount device: %w", err)
 	}
 
-	// Unmount device
-	// unmountCmd := exec.Command("umount", tempMountPath)
-	// err = unmountCmd.Run()
-	args = []string{tempMountPath}
-	_, err = cmdx.RunCommandReturnOutputWithDirAndEnv("umount", tmppath, nil, args...)
+	return tempMountPath, nil
+}
+
+func cleanupTempMount(tempMountPath string) error {
+	args := []string{tempMountPath}
+	_, err := cmdx.RunCommandReturnOutputWithDirAndEnv("umount", tmppath, nil, args...)
 	if err != nil {
-		fmt.Printf("Error unmounting device: %v\n", err)
+		return fmt.Errorf("failed to unmount device: %w", err)
 	}
 
-	// Clean up: remove the temporary mount directory
 	err = os.RemoveAll(tempMountPath)
 	if err != nil {
-		fmt.Printf("Error removing temporary mount directory: %v\n", err)
+		return fmt.Errorf("failed to remove temporary mount directory: %w", err)
 	}
+	return nil
+}
+
+func createSubvolumeAtPath(localsubvolume string, tempMountPath string) error {
+	basename := filepath.Base(localsubvolume)
+	newSubvolPath := filepath.Join(tempMountPath, basename)
+
+	err := btrfs.SubvolCreate(newSubvolPath)
+	if err != nil {
+		return fmt.Errorf("failed to create subvolume: %w", err)
+	}
+	return nil
 }
 
 func GetMountpoint(subvolume string) (string, string, error) {
