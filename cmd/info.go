@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 
@@ -24,35 +25,39 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Args: cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		route := args[len(args)-1]
-		if btrfs_sv, err := check_btrfs_subvolume(route); err != nil {
-			btrfs_subfolder, err := isPathOnBtrfs(btrfs_sv)
-			print(btrfs_subfolder, "\n")
-			if err != nil {
-				fmt.Printf("Error: %v\n", err)
-				return
-			}
-			if btrfs_subfolder {
-				print(btrfs_sv, " is a subfolder\n")
-			}
-			log.Fatal(btrfs_sv, " is not a valid btrfs subvolume\n")
-			return
-		}
-		var info btrfs.Info
-		info, err := btrfs.SubvolInfo(route)
-		if err != nil {
-			log.Fatal("Error obtaining the info of ", route, "; Not enough priviledges")
-			return
-		}
-		jsoninfo, err := json.Marshal(info)
-		if err != nil {
-			log.Fatal("error marshaling JSON:", err)
-		}
-		fmt.Print(string(jsoninfo))
-	},
+	Run:  func(cmd *cobra.Command, args []string) { BasicInfo(args) },
 }
 
+func BasicInfo(args []string) ([]byte, error) {
+	route := args[len(args)-1]
+	if btrfs_sv, err := check_btrfs_subvolume(route); err != nil {
+		btrfs_subfolder, err := isPathOnBtrfs(btrfs_sv)
+		print(btrfs_subfolder, "\n")
+		if err != nil {
+			fmt.Printf("Error: %v\n", err)
+			return nil, err
+		}
+		if btrfs_subfolder {
+			//print(btrfs_sv, " is a subfolder\n")
+			return nil, errors.New(btrfs_sv + " is a btrfs subfolder")
+		}
+
+		return nil, errors.New(btrfs_sv + " is not a valid btrfs subvolume")
+	}
+	var info btrfs.Info
+	info, err := btrfs.SubvolInfo(route)
+	if err != nil {
+		log.Fatal("Error obtaining the info of ", route, "; Not enough priviledges")
+		return nil, err
+	}
+	jsoninfo, err := json.Marshal(info)
+	if err != nil {
+		log.Fatal("error marshaling JSON:", err)
+		return nil, err
+	}
+	fmt.Print(string(jsoninfo))
+	return jsoninfo, nil
+}
 func isPathOnBtrfs(path string) (bool, error) {
 	var statfs unix.Statfs_t
 	if err := unix.Statfs(path, &statfs); err != nil {
