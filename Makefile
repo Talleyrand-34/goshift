@@ -53,5 +53,10 @@ build-linux:
 docker-build:
 	docker build -t $(BINARY_NAME):latest .
 
+docker-test:
+	sudo docker build -t goshift-test .
+	sudo docker run --privileged goshift-test
 .PHONY: all build test clean run deps build-linux docker-build
+
+
 

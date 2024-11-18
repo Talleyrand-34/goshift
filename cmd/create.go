@@ -103,7 +103,8 @@ func create_subvolume_redhat_style(subvolume string) {
 }
 
 func GetMountpoint(subvolume string) (string, string, error) {
-	args := []string{"--target", subvolume}
+	//args := []string{"--target=", subvolume}
+	args := []string{"--target=" + subvolume}
 	cmd, err := cmdx.RunCommandReturnOutputWithDirAndEnv("findmnt", "/tmp", nil, args...)
 	if err != nil {
 		return "", "", err
