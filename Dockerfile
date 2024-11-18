@@ -12,6 +12,9 @@ WORKDIR /app
 COPY . .
 # Ensure all files in /app are owned by root
 RUN chown -R root:root /app
+# Start Generation Here
+RUN go mod tidy
+# End Generation Here
 
 # Run the tests
 #CMD ["go", "test", "-v", "cmd/create_test.go"]
