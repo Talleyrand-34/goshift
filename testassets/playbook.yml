@@ -1,0 +1,72 @@
+---
+- name: Main Playbook to Install BTRFS and Go
+  hosts: all
+  become: yes
+
+  tasks:
+     
+    - name: Remove existing Go installation
+      file:
+        path: /usr/local/go
+        state: absent
+
+    - name: Extract Go tarball
+      unarchive:
+        src: /vagrant/testassets/go1.23.3.linux-amd64.tar.gz
+        dest: /usr/local
+        remote_src: yes
+
+    - name: Ensure Go binary path is in the environment
+      lineinfile:
+        path: /etc/profile
+        line: 'export PATH=$PATH:/usr/local/go/bin'
+        create: yes
+        state: present
+
+    - name: Source profile to update environment variables
+      shell: source /etc/profile
+
+
+    - name: Install btrfs-progs
+      dnf:
+        name: btrfs-progs
+        state: present
+
+    - name: Create BTRFS filesystems
+      command: "mkfs.btrfs -f /dev/{{ item.device }}"
+      loop:
+        - { device: 'vdb', mount: '/mnt/disk1' }
+        - { device: 'vdc', mount: '/mnt/disk2' }
+        - { device: 'vdd', mount: '/mnt/disk3' }
+
+    - name: Create mount points
+      file:
+        path: "{{ item.mount }}"
+        state: directory
+      loop:
+        - { device: 'vdb', mount: '/mnt/disk1' }
+        - { device: 'vdc', mount: '/mnt/disk2' }
+        - { device: 'vdd', mount: '/mnt/disk3' }
+
+    - name: Mount BTRFS filesystems
+      mount:
+        path: "{{ item.mount }}"
+        src: "/dev/{{ item.device }}"
+        fstype: btrfs
+        opts: defaults
+        state: mounted
+      loop:
+        - { device: 'vdb', mount: '/mnt/disk1' }
+        - { device: 'vdc', mount: '/mnt/disk2' }
+        - { device: 'vdd', mount: '/mnt/disk3' }
+
+    - name: Set BTRFS mounts in fstab
+      lineinfile:
+        path: /etc/fstab
+        line: "/dev/{{ item.device }} {{ item.mount }} btrfs defaults 0 0"
+        state: present
+      loop:
+        - { device: 'vdb', mount: '/mnt/disk1' }
+        - { device: 'vdc', mount: '/mnt/disk2' }
+        - { device: 'vdd', mount: '/mnt/disk3' }
+
