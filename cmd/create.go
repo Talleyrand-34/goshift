@@ -47,6 +47,7 @@ func interface_create_subvolume(cmd *cobra.Command, args []string, create_subvol
 		return
 	}
 	create_redhat_subvol(route)
+	// TODO mount new subvolume into destiny
 }
 
 func CreateSubvolumeRedhatStyle(subvolume string) error {
