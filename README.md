@@ -16,6 +16,8 @@ Future alternative to Timeshift
     - [x] Basic creation
     - [] Automount after creation
 - Backups
+## Test this app
+  You have a Vagrantfile where you can test the program. Build the program and then run the vagrant machine.
 
 ## Thanks to / Inspiration
 - [Tsoding Daily](https://www.youtube.com/watch?v=LQ2rX5B0DUA&t=166s)
