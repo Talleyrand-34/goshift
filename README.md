@@ -8,11 +8,13 @@ Future alternative to Timeshift
 ## Current app
 - Info
   - [x] Basic
-  - [] Test
+  - [x] Test
 - Create
   - [x] Basic
-  - [] Test
+  - [x] Test
   - [] Redhat style standard subvolume creation
+    - [x] Basic creation
+    - [] Automount after creation
 - Backups
 
 ## Thanks to / Inspiration
